@@ -3,7 +3,7 @@ import * as THREE from "three";
 import * as Tone from "tone";
 import {
   Sword, Shield, Gem, FlaskConical, Coins, Package, Store,
-  Heart, Zap, X, ArrowLeftRight, Skull, LogOut, MapPin, Trash2, Tag
+  Heart, Zap, X, ArrowLeftRight, Skull, LogOut, MapPin, Trash2, Tag, MessageCircle, BookOpen
 } from "lucide-react";
 
 /* =========================================================================
@@ -139,6 +139,66 @@ const DUNGEONS = {
   },
 };
 
+/* =========================================================================
+   Story — a small branching quest told through one NPC (the Seer)
+   p.quest = { stage: 0..5, flags: {} }
+   ========================================================================= */
+
+const QUEST_OBJECTIVES = {
+  0: "Meydandaki Kahin ile konuş",
+  1: "Demir Mahzen'de Zindan Şefi'ni yen",
+  2: "Kahin'e dön",
+  3: "Gölge Uçurumu'nda Minotor'u yen",
+  4: "Kahin'e dön",
+  5: "",
+};
+
+function getSeerDialogue(p) {
+  const q = p.quest || { stage: 0, flags: {} };
+  switch (q.stage) {
+    case 0:
+      return {
+        text: "Çocuğum... Erebos'un derinliklerinden tuhaf bir fısıltı yükseliyor. Zindanlardan taşan yaratıklar tesadüf değil — biri, ya da bir şey, onları uyandırıyor. Demir Mahzen'in efendisini alt edip bana dönersen, belki gerçeği birlikte çözebiliriz.",
+        choices: [
+          { label: "Kabul ediyorum. Zindan Şefi'ni yeneceğim.", effect: "start_quest1" },
+          { label: "Şimdi olmaz.", effect: "close" },
+        ],
+      };
+    case 1:
+      return {
+        text: "Demir Mahzen'in en derin odasında seni Zindan Şefi bekliyor. Ondan tuhaf bir güç akıyor... dikkatli ol evlat.",
+        choices: [{ label: "Anlaşıldı.", effect: "close" }],
+      };
+    case 2:
+      return {
+        text: "Zindan Şefi'ni yendin — aferin sana! Sana bir hediye sunmak istiyorum, hangisini seçersin?",
+        choices: [
+          { label: "Üç şifa iksiri al.", effect: "reward_potions" },
+          { label: "100 altın al.", effect: "reward_gold" },
+        ],
+      };
+    case 3:
+      return {
+        text: "Gölge Uçurumu'nun kalbinde çok daha karanlık bir şey uyanıyor: Minotor. Onu bul ve karanlığın kaynağına in.",
+        choices: [{ label: "Gidiyorum.", effect: "close" }],
+      };
+    case 4:
+      return {
+        text: "Minotor'u yendin ve karanlığın kalbindeki gerçeği gördün: Erebos'un unutulmuş bir gücü, serbest kalmak için canavarları kullanıyormuş. Şimdi bir seçim yapmalısın. O gücü sonsuza dek yok edip huzuru geri getirebilir, ya da onu kendi içine çekip sınırsız bir kudrete ulaşabilirsin. Ne seçersin?",
+        choices: [
+          { label: "Gücü yok et. (Barış Sonu)", effect: "ending_light" },
+          { label: "Gücü kendine al. (Kudret Sonu)", effect: "ending_dark" },
+        ],
+      };
+    case 5:
+      return q.flags.ending === "light"
+        ? { text: "Karanlık dağıldı, Erebos'a uzun zamandır görmediği bir huzur geldi. Adın buralarda bir kahraman olarak anılacak.", choices: [{ label: "...", effect: "close" }] }
+        : { text: "Gücü içinde hissediyorsun... damarlarında akan bir kudret. Ama aynadaki gözlerin artık eskisi gibi değil. Erebos seni değiştirdi — belki de sonsuza dek.", choices: [{ label: "...", effect: "close" }] };
+    default:
+      return { text: "Yolun açık olsun, gezgin.", choices: [{ label: "Görüşürüz.", effect: "close" }] };
+  }
+}
+
 function xpToNext(level) { return Math.round(45 * Math.pow(level, 1.55)); }
 function newPlayer(name, cls) {
   const c = CLASS_DEFS[cls];
@@ -149,6 +209,7 @@ function newPlayer(name, cls) {
     hp: c.hp, mana: c.mana,
     equipment: { weapon: null, armor: null, accessory: null },
     inventory: [],
+    quest: { stage: 0, flags: {} },
   };
 }
 function effectiveStats(p) {
@@ -710,7 +771,7 @@ export default function ErebosGame() {
     for (let i = 0; i <= steps; i++) {
       const k = i / steps;
       const x = x1 + (x2 - x1) * k, z = z1 + (z2 - z1) * k;
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(width / 2 + Math.random() * 0.35, 8), new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true, roughness: 0.95 }));
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(width / 2 + Math.random() * 0.35, 8), new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
       patch.rotation.x = -Math.PI / 2; patch.rotation.z = Math.random() * Math.PI; patch.position.set(x, 0.013, z);
       group.add(patch);
     }
@@ -765,7 +826,7 @@ export default function ErebosGame() {
     const flame = new THREE.Mesh(new THREE.IcosahedronGeometry(0.15, 0), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 1.3, flatShading: true }));
     flame.position.set(x, 1.5, z);
     group.add(pole, flame);
-    if (withLight) { const l = new THREE.PointLight(color, 0.75, 9, 2); l.position.set(x, 1.6, z); group.add(l); }
+    if (withLight) { const l = new THREE.PointLight(color, 1.1, 13, 2); l.position.set(x, 1.6, z); group.add(l); }
   }
 
   function addMonster(defKey, x, z) {
@@ -834,7 +895,7 @@ export default function ErebosGame() {
     for (let i = 0; i < 70; i++) {
       const ang = Math.random() * Math.PI * 2, rad = Math.random() * TOWN_RADIUS * 0.92;
       const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(3 + Math.random() * 5, 6), new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x4a7a3a : 0x35592b, flatShading: true }));
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(3 + Math.random() * 5, 6), new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x4a7a3a : 0x35592b, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
       patch.rotation.x = -Math.PI / 2; patch.rotation.z = Math.random() * Math.PI; patch.position.set(x, 0.01, z);
       t.worldGroup.add(patch);
     }
@@ -858,7 +919,7 @@ export default function ErebosGame() {
     });
 
     // dirt plaza + paths connecting the landmarks
-    const ring = new THREE.Mesh(new THREE.CircleGeometry(15, 24), new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true }));
+    const ring = new THREE.Mesh(new THREE.CircleGeometry(15, 24), new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.015;
     t.worldGroup.add(ring);
     addDirtPath(t.worldGroup, 0, 4, -19, -8, 2.4);
@@ -989,6 +1050,18 @@ export default function ErebosGame() {
     tufts.count = placed;
     t.worldGroup.add(tufts);
 
+    // the Seer — story NPC
+    const seerGroup = buildCharacterMesh(0x6f4fae, "humanoid");
+    seerGroup.position.set(6, 0, -2);
+    seerGroup.rotation.y = Math.PI * 0.7;
+    const orbGeo = new THREE.IcosahedronGeometry(0.16, 0);
+    const orbMat = new THREE.MeshStandardMaterial({ color: 0xd6c4f0, emissive: 0xa24dd6, emissiveIntensity: 1.1, flatShading: true });
+    const orb = new THREE.Mesh(orbGeo, orbMat);
+    orb.position.set(6, 2.5, -2);
+    const orbLight = new THREE.PointLight(0xa24dd6, 0.6, 6, 2); orbLight.position.set(6, 2.5, -2);
+    t.worldGroup.add(seerGroup, orb, orbLight);
+    t.interactables.push({ type: "npc", npcId: "seer", pos: new THREE.Vector3(6, 0, -2), radius: 3.2, label: "Kahin Morwyn" });
+
     // blacksmith building (interactable shop)
     const smith = new THREE.Group();
     const smithBody = wallMesh(6, 4, 5, 0x3a332b); smithBody.position.set(-19, 2, -8);
@@ -1062,10 +1135,12 @@ export default function ErebosGame() {
     const theme = dg.theme || "iron";
     const iron = theme === "iron";
     const palette = iron
-      ? { fog: 0x0b0f14, floor: 0x232a30, corridor: 0x1a2024, wall: 0x1c2228, wallEdge: 0x2a343c, pillar: 0x3a4048, torch: 0xe8703f, prop: 0x454f5c }
-      : { fog: 0x0d0714, floor: 0x241a2c, corridor: 0x1c1420, wall: 0x1e1424, wallEdge: 0x2c1e34, pillar: 0x2a2030, torch: 0xa24dd6, prop: 0x3a2a44 };
-    t.scene.fog = new THREE.FogExp2(palette.fog, 0.021);
+      ? { fog: 0x161c22, floor: 0x323c44, corridor: 0x262e34, wall: 0x2a333a, wallEdge: 0x3e4a54, pillar: 0x454f58, torch: 0xe8703f, prop: 0x5a6570 }
+      : { fog: 0x18101f, floor: 0x362a42, corridor: 0x281c32, wall: 0x2c1f38, wallEdge: 0x40294e, pillar: 0x3a2a48, torch: 0xa24dd6, prop: 0x4a3658 };
+    t.scene.fog = new THREE.FogExp2(palette.fog, 0.015);
     t.scene.background = new THREE.Color(palette.fog);
+    const ambient = new THREE.AmbientLight(iron ? 0x5a6a78 : 0x5a4a68, 0.6);
+    t.worldGroup.add(ambient);
 
     dg.rooms.forEach((room) => {
       const g = groundMesh(room.w, room.d, room.corridor ? palette.corridor : palette.floor);
@@ -1106,7 +1181,7 @@ export default function ErebosGame() {
           [room.cx - room.w / 2 + 1.6, room.cz + room.d / 2 - 1.6],
           [room.cx + room.w / 2 - 1.6, room.cz + room.d / 2 - 1.6],
         ];
-        corners.forEach((c, i) => addTorch(t.worldGroup, c[0], c[1], palette.torch, i === 0 || (room.boss && i === 2)));
+        corners.forEach((c, i) => addTorch(t.worldGroup, c[0], c[1], palette.torch, i === 0 || i === 3 || room.boss));
 
         if (room.pillars) {
           const pillarCount = 6;
@@ -1154,16 +1229,6 @@ export default function ErebosGame() {
       });
     });
 
-    // atmospheric ceiling over the whole dungeon footprint
-    const allX = dg.rooms.flatMap((r) => [r.cx - r.w / 2, r.cx + r.w / 2]);
-    const allZ = dg.rooms.flatMap((r) => [r.cz - r.d / 2, r.cz + r.d / 2]);
-    const cw = Math.max(...allX) - Math.min(...allX), cd = Math.max(...allZ) - Math.min(...allZ);
-    const ccx = (Math.max(...allX) + Math.min(...allX)) / 2, ccz = (Math.max(...allZ) + Math.min(...allZ)) / 2;
-    const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(cw + 14, cd + 14), new THREE.MeshBasicMaterial({ color: palette.fog, transparent: true, opacity: 0.9, side: THREE.DoubleSide }));
-    ceiling.rotation.x = Math.PI / 2; ceiling.position.set(ccx, 9.5, ccz);
-    ceiling.userData.noShadow = true;
-    t.worldGroup.add(ceiling);
-
     // exit portal + entrance gate, near entrance room
     const entrance = dg.rooms[0];
     const exitPos = new THREE.Vector3(entrance.cx, 0, entrance.cz + entrance.d / 2 - 2);
@@ -1200,9 +1265,18 @@ export default function ErebosGame() {
     t.camera.position.copy(t.playerPos).add(t.camOffset);
     t.camera.lookAt(t.playerPos);
     if (t.sun) {
-      t.sun.position.set(t.playerPos.x + 18, t.playerPos.y + 30, t.playerPos.z + 12);
-      t.sun.target.position.copy(t.playerPos);
-      t.sun.target.updateMatrixWorld();
+      // Snap the shadow-casting light to a coarse grid instead of following every frame at
+      // sub-pixel precision — a continuously-drifting light causes the shadow map to visibly
+      // shimmer ("swim") across the ground as the character moves.
+      const grid = 3;
+      const sx = Math.round(t.playerPos.x / grid) * grid;
+      const sz = Math.round(t.playerPos.z / grid) * grid;
+      if (t._sunSnapX !== sx || t._sunSnapZ !== sz) {
+        t._sunSnapX = sx; t._sunSnapZ = sz;
+        t.sun.position.set(sx + 18, 30, sz + 12);
+        t.sun.target.position.set(sx, 0, sz);
+        t.sun.target.updateMatrixWorld();
+      }
     }
   }
 
@@ -1213,6 +1287,7 @@ export default function ErebosGame() {
     if (!near) return;
     if (near.type === "market") setUi({ panel: "market" });
     if (near.type === "shop") { ensureShopStock(); setUi({ panel: "shop" }); }
+    if (near.type === "npc") setUi({ panel: "dialogue", npcId: near.npcId });
     if (near.type === "portal") enterDungeon(near.dungeonId);
     if (near.type === "exit") returnToTown();
   }
@@ -1259,7 +1334,12 @@ export default function ErebosGame() {
       addDrop(m.pos.x + (Math.random() - 0.5) * 1.4, m.pos.z + (Math.random() - 0.5) * 1.4, "item", item);
     }
     gainXp(m.def.xp);
-    if (m.def.boss) { pushFeed(true, `${p.name}, ${m.def.name} adlı canavarı alt etti!`); showToast(`${m.def.name} yenildi!`, "good"); }
+    if (m.def.boss) {
+      pushFeed(true, `${p.name}, ${m.def.name} adlı canavarı alt etti!`); showToast(`${m.def.name} yenildi!`, "good");
+      if (!p.quest) p.quest = { stage: 0, flags: {} };
+      if (m.key === "champion" && p.quest.stage === 1) { p.quest.stage = 2; showToast("Görev: Kahin'e dön", "good"); saveGame(); }
+      if (m.key === "minotaur" && p.quest.stage === 3) { p.quest.stage = 4; showToast("Görev: Kahin'e dön", "good"); saveGame(); }
+    }
   }
   function gainXp(amount) {
     const p = gs.current.player;
@@ -1541,29 +1621,34 @@ export default function ErebosGame() {
     t.lastT = time;
     const p = gs.current.player;
 
-    if (p && screenRef.current === "dungeon") updateDungeonFrame(dt, time);
-    if (p && screenRef.current === "town") updateTownFrame(dt);
+    try {
+      if (p && screenRef.current === "dungeon") updateDungeonFrame(dt, time);
+      if (p && screenRef.current === "town") updateTownFrame(dt);
 
-    updateProjectiles(dt);
-    updateTraps();
-    updateFX();
-    if (t.pondMesh) t.pondMesh.material.emissiveIntensity = 0.3 + Math.sin(time * 0.0012) * 0.08;
-    if (t.seaMesh) t.seaMesh.material.emissiveIntensity = 0.35 + Math.sin(time * 0.0009 + 1.4) * 0.08;
+      updateProjectiles(dt);
+      updateTraps();
+      updateFX();
+      if (t.pondMesh) t.pondMesh.material.emissiveIntensity = 0.3 + Math.sin(time * 0.0012) * 0.08;
+      if (t.seaMesh) t.seaMesh.material.emissiveIntensity = 0.35 + Math.sin(time * 0.0009 + 1.4) * 0.08;
 
-    // cooldown ticking
-    Object.keys(gs.current.cooldowns).forEach((k) => { if (gs.current.cooldowns[k] > 0) gs.current.cooldowns[k] = Math.max(0, gs.current.cooldowns[k] - dt); });
+      // cooldown ticking
+      Object.keys(gs.current.cooldowns).forEach((k) => { if (gs.current.cooldowns[k] > 0) gs.current.cooldowns[k] = Math.max(0, gs.current.cooldowns[k] - dt); });
 
-    // drops bob + pickup
-    updateDrops(dt);
+      // drops bob + pickup
+      updateDrops(dt);
 
-    // unflash meshes
-    t.monsters.forEach((m) => { if (m.group.userData.flashUntil && performance.now() > m.group.userData.flashUntil) unflash(m.group); });
-    if (t.playerMesh && t.playerMesh.parent.userData.flashUntil && performance.now() > t.playerMesh.parent.userData.flashUntil) unflash(t.playerMesh.parent);
+      // unflash meshes
+      t.monsters.forEach((m) => { if (m.group.userData.flashUntil && performance.now() > m.group.userData.flashUntil) unflash(m.group); });
+      if (t.playerMesh && t.playerMesh.parent.userData.flashUntil && performance.now() > t.playerMesh.parent.userData.flashUntil) unflash(t.playerMesh.parent);
 
-    t.renderer.render(t.scene, t.camera);
+      t.renderer.render(t.scene, t.camera);
 
-    if (time - t.lastSync > 130) { t.lastSync = time; setTick((x) => x + 1); }
-    if (time - t.lastAutosave > 15000) { t.lastAutosave = time; saveGame(); }
+      if (time - t.lastSync > 130) { t.lastSync = time; setTick((x) => x + 1); }
+      if (time - t.lastAutosave > 15000) { t.lastAutosave = time; saveGame(); }
+    } catch (err) {
+      // Never let a transient error kill the render/movement loop permanently.
+      console.error("Erebos frame error:", err);
+    }
 
     t.raf = requestAnimationFrame(loop);
   }
@@ -1728,6 +1813,9 @@ export default function ErebosGame() {
   }
 
   function onPlayerDeath() {
+    const t = three.current;
+    if (t.dying) return;
+    t.dying = true;
     const p = gs.current.player;
     p.gold = Math.round(p.gold * 0.9);
     playSfx("death");
@@ -1736,9 +1824,8 @@ export default function ErebosGame() {
       const stats = effectiveStats(p);
       p.hp = Math.round(stats.maxHp * 0.5);
       p.mana = stats.maxMana;
-      gs.current.zone = "town";
-      buildZone("town", null);
-      goScreen("town");
+      t.dying = false;
+      returnToTown();
     }, 2200);
   }
 
@@ -1761,6 +1848,7 @@ export default function ErebosGame() {
     try {
       const res = await window.storage.get("erebos-save-v1", false);
       const p = JSON.parse(res.value);
+      if (!p.quest) p.quest = { stage: 0, flags: {} };
       gs.current.player = p;
       gs.current.zone = "town";
       screenRef.current = "town";
@@ -1811,6 +1899,39 @@ export default function ErebosGame() {
     showToast(`${item.name} satın alındı`, "good");
     playSfx("buy");
     setTick((x) => x + 1);
+  }
+
+  function applyDialogueEffect(effect) {
+    const p = gs.current.player;
+    if (!p) return;
+    if (!p.quest) p.quest = { stage: 0, flags: {} };
+    if (effect === "start_quest1") {
+      p.quest.stage = 1;
+      showToast("Yeni görev: Zindan Şefi'ni yen", "good");
+      pushFeed(true, `${p.name} "Karanlığın Fısıltısı" görevine başladı.`);
+    } else if (effect === "reward_potions") {
+      for (let i = 0; i < 3; i++) p.inventory.push({ id: Math.random().toString(36).slice(2) + Date.now().toString(36) + i, name: "Küçük İksir", type: "potion", slot: null, icon: "potion", stat: "heal", statValue: 30, rarity: "common", value: 18 });
+      p.quest.stage = 3;
+      showToast("3 İksir kazandın! Yeni görev: Minotor'u yen", "good");
+    } else if (effect === "reward_gold") {
+      p.gold += 100;
+      p.quest.stage = 3;
+      showToast("100 altın kazandın! Yeni görev: Minotor'u yen", "good");
+    } else if (effect === "ending_light") {
+      p.quest.stage = 5; p.quest.flags.ending = "light";
+      p.baseAtk += 2; p.baseDef += 3;
+      showToast("Barış Sonu kazanıldı!", "good");
+      pushFeed(true, `${p.name} Erebos'a huzur getirdi. (Barış Sonu)`);
+      playSfx("levelup");
+    } else if (effect === "ending_dark") {
+      p.quest.stage = 5; p.quest.flags.ending = "dark";
+      p.baseAtk += 6;
+      showToast("Kudret Sonu kazanıldı!", "good");
+      pushFeed(true, `${p.name} karanlığın gücünü kendine kattı. (Kudret Sonu)`);
+      playSfx("levelup");
+    }
+    setTick((x) => x + 1);
+    saveGame();
   }
 
   async function refreshMarket() {
@@ -1935,7 +2056,12 @@ export default function ErebosGame() {
 
           {/* top bar */}
           <div className="erb-topbar">
-            <div className="erb-zonepill">{screen === "dungeon" ? DUNGEONS[gs.current.dungeonId].name : "Erebos Kasabası"}</div>
+            <div className="erb-topbar-left">
+              <div className="erb-zonepill">{screen === "dungeon" ? DUNGEONS[gs.current.dungeonId].name : "Erebos Kasabası"}</div>
+              {QUEST_OBJECTIVES[p.quest ? p.quest.stage : 0] && (
+                <div className="erb-questpill"><BookOpen size={13} /> {QUEST_OBJECTIVES[p.quest ? p.quest.stage : 0]}</div>
+              )}
+            </div>
             <div className="erb-gold"><Coins size={16} color="#d6a84d" /> {p.gold}</div>
           </div>
 
@@ -2033,6 +2159,10 @@ export default function ErebosGame() {
 
           {ui.panel === "shop" && (
             <ShopPanel player={p} stock={shopStock} onClose={() => setUi({ panel: null })} onBuy={buyFromShop} onRestock={restockShop} />
+          )}
+
+          {ui.panel === "dialogue" && (
+            <DialoguePanel npcId={ui.npcId} player={p} onChoice={applyDialogueEffect} onClose={() => setUi({ panel: null })} />
           )}
 
           {screen === "dead" && (
@@ -2142,6 +2272,33 @@ function InventoryPanel({ player, stats, onClose, onEquip, onUnequip, onUse, onD
 /* =========================================================================
    Marketplace panel
    ========================================================================= */
+function DialoguePanel({ npcId, player, onChoice, onClose }) {
+  const dialogue = npcId === "seer" ? getSeerDialogue(player) : null;
+  if (!dialogue) return null;
+  return (
+    <div className="erb-panel-overlay" onClick={onClose}>
+      <div className="erb-panel erb-dialogue-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="erb-panel-head">
+          <div className="erb-panel-title"><MessageCircle size={18} /> Kahin Morwyn</div>
+          <button className="erb-iconbtn" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="erb-dialogue-text">{dialogue.text}</div>
+        <div className="erb-dialogue-choices">
+          {dialogue.choices.map((c, i) => (
+            <button
+              key={i}
+              className="erb-dialogue-choice"
+              onClick={() => { if (c.effect && c.effect !== "close") onChoice(c.effect); onClose(); }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ShopPanel({ player, stock, onClose, onBuy, onRestock }) {
   return (
     <div className="erb-panel-overlay" onClick={onClose}>
@@ -2368,7 +2525,9 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-b
 .erb-canvas { width:100%; height:100%; display:block; transition: filter .15s; touch-action:none; }
 .erb-hit { filter: saturate(1.4) sepia(0.15); }
 
-.erb-topbar { position:absolute; top: max(10px, env(safe-area-inset-top)); left:10px; right:10px; display:flex; justify-content:space-between; align-items:center; pointer-events:none; }
+.erb-topbar { position:absolute; top: max(10px, env(safe-area-inset-top)); left:10px; right:10px; display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; gap:8px; }
+.erb-topbar-left { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.erb-questpill { font-size: clamp(9px,2vw,11.5px); background:rgba(111,79,174,0.22); border:1px solid #6f4fae; color:#d6c4f0; padding: 5px clamp(8px,2vw,12px); border-radius:20px; display:flex; align-items:center; gap:5px; white-space:nowrap; }
 .erb-zonepill { font-family:'Cinzel',serif; font-size: clamp(9px,2.2vw,12px); letter-spacing:1.5px; background:rgba(11,10,8,0.75); border:1px solid #3a332b; padding: 5px clamp(8px,2vw,14px); border-radius:20px; white-space:nowrap; }
 .erb-gold { font-weight:600; background:rgba(11,10,8,0.75); border:1px solid #3a332b; padding: 5px clamp(8px,2vw,12px); border-radius:20px; display:flex; align-items:center; gap:6px; font-size: clamp(10px,2.2vw,13px); }
 
@@ -2440,6 +2599,11 @@ html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; overscroll-b
 .erb-tab { background:transparent; border:1px solid #3a332b; color:#a89e88; padding:6px 12px; border-radius:20px; font-size:11.5px; cursor:pointer; white-space:nowrap; }
 .erb-tab-active { border-color:#c1502e; color:#e9dfc7; }
 .erb-payout { background:#241c10; border:1px solid #b98a3d; padding:8px 14px; border-radius:8px; font-size:12.5px; margin-bottom:12px; cursor:pointer; }
+.erb-dialogue-panel { max-width: 520px; }
+.erb-dialogue-text { font-size:14px; line-height:1.65; color:#e9dfc7; background:#0e0c09; border:1px solid #2a2420; border-left:3px solid #6f4fae; border-radius:8px; padding:16px; margin-bottom:14px; font-style:italic; }
+.erb-dialogue-choices { display:flex; flex-direction:column; gap:8px; }
+.erb-dialogue-choice { font-family:'Cinzel',serif; text-align:left; background:#1c1815; border:1px solid #3a332b; color:#e9dfc7; padding:11px 16px; border-radius:8px; font-size:13px; cursor:pointer; transition: border-color .15s, background .15s; }
+.erb-dialogue-choice:hover { border-color:#a24dd6; background:#221c2a; }
 .erb-sellform { display:flex; gap:6px; align-items:center; margin-top:4px; }
 
 @media (max-width: 560px) {
