@@ -583,23 +583,15 @@ export default function ErebosGame() {
 
     const renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, antialias: true, alpha: false });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
-    const hemi = new THREE.HemisphereLight(0x8fa7c9, 0x2a2015, 0.55);
+    const hemi = new THREE.HemisphereLight(0x8fa7c9, 0x2a2015, 0.75);
     scene.add(hemi);
     const sun = new THREE.DirectionalLight(0xffe8c9, 1.05);
     sun.position.set(18, 30, 12);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -46; sun.shadow.camera.right = 46;
-    sun.shadow.camera.top = 46; sun.shadow.camera.bottom = -46;
-    sun.shadow.camera.near = 1; sun.shadow.camera.far = 120;
-    sun.shadow.bias = -0.0018;
     scene.add(sun);
     scene.add(sun.target);
-    const fill = new THREE.DirectionalLight(0x7f9fc9, 0.25);
+    const fill = new THREE.DirectionalLight(0x7f9fc9, 0.3);
     fill.position.set(-12, 14, -10);
     scene.add(fill);
 
@@ -728,13 +720,6 @@ export default function ErebosGame() {
     t.pondMesh = null; t.seaMesh = null;
   }
 
-  function enableShadows(root) {
-    root.traverse((o) => {
-      if (o.userData.noShadow) return;
-      if (o.isInstancedMesh) { o.castShadow = false; o.receiveShadow = false; return; }
-      if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
-    });
-  }
 
   function groundMesh(w, d, color) {
     const geo = new THREE.PlaneGeometry(w, d, 1, 1);
@@ -765,13 +750,14 @@ export default function ErebosGame() {
     mesh.renderOrder = -10;
     return mesh;
   }
+  const dirtPathMat = new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   function addDirtPath(group, x1, z1, x2, z2, width) {
     const len = Math.hypot(x2 - x1, z2 - z1);
-    const steps = Math.max(1, Math.ceil(len / (width * 0.55)));
+    const steps = Math.max(1, Math.ceil(len / (width * 0.9)));
     for (let i = 0; i <= steps; i++) {
       const k = i / steps;
       const x = x1 + (x2 - x1) * k, z = z1 + (z2 - z1) * k;
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(width / 2 + Math.random() * 0.35, 8), new THREE.MeshStandardMaterial({ color: 0x5a4a2e, flatShading: true, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(width / 2 + Math.random() * 0.35, 7), dirtPathMat);
       patch.rotation.x = -Math.PI / 2; patch.rotation.z = Math.random() * Math.PI; patch.position.set(x, 0.013, z);
       group.add(patch);
     }
@@ -892,10 +878,12 @@ export default function ErebosGame() {
     t.worldGroup.add(ground);
 
     // mottled grass patches for natural color variation
-    for (let i = 0; i < 70; i++) {
+    const grassPatchMatA = new THREE.MeshStandardMaterial({ color: 0x4a7a3a, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    const grassPatchMatB = new THREE.MeshStandardMaterial({ color: 0x35592b, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+    for (let i = 0; i < 40; i++) {
       const ang = Math.random() * Math.PI * 2, rad = Math.random() * TOWN_RADIUS * 0.92;
       const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
-      const patch = new THREE.Mesh(new THREE.CircleGeometry(3 + Math.random() * 5, 6), new THREE.MeshStandardMaterial({ color: Math.random() > 0.5 ? 0x4a7a3a : 0x35592b, flatShading: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+      const patch = new THREE.Mesh(new THREE.CircleGeometry(3 + Math.random() * 5, 6), Math.random() > 0.5 ? grassPatchMatA : grassPatchMatB);
       patch.rotation.x = -Math.PI / 2; patch.rotation.z = Math.random() * Math.PI; patch.position.set(x, 0.01, z);
       t.worldGroup.add(patch);
     }
@@ -971,7 +959,7 @@ export default function ErebosGame() {
       }
     }
     // distant second mountain ring for parallax depth (hazy, desaturated)
-    const farCount = 26;
+    const farCount = 16;
     for (let i = 0; i < farCount; i++) {
       const ang = (i / farCount) * Math.PI * 2;
       const dirZ = Math.sin(ang), dirX = Math.cos(ang);
@@ -992,7 +980,7 @@ export default function ErebosGame() {
     }
 
     // scattered trees, pines, bushes & rocks
-    for (let i = 0; i < 65; i++) {
+    for (let i = 0; i < 42; i++) {
       const ang = Math.random() * Math.PI * 2, rad = 20 + Math.random() * (TOWN_RADIUS * 0.75);
       const x = Math.cos(ang) * rad, z = Math.sin(ang) * rad;
       if (Math.hypot(x - pondPos.x, z - pondPos.z) < pondRadius + 3) continue;
@@ -1029,7 +1017,7 @@ export default function ErebosGame() {
     // grass tufts, instanced for performance
     const tuftGeo = new THREE.ConeGeometry(0.06, 0.35, 4);
     const tuftMat = new THREE.MeshStandardMaterial({ color: 0x5a9a45, flatShading: true });
-    const tuftCount = 600;
+    const tuftCount = 380;
     const tufts = new THREE.InstancedMesh(tuftGeo, tuftMat, tuftCount);
     const dummy = new THREE.Object3D();
     let placed = 0, attempts = 0;
@@ -1122,7 +1110,6 @@ export default function ErebosGame() {
     [[-7, -3], [7, -3], [-7, 5], [7, 5]].forEach(([x, z]) => addLamp(t.worldGroup, x, z, 0xe8703f));
     [[-9, -17], [9, -17]].forEach(([x, z]) => addLamp(t.worldGroup, x, z, 0xd6a84d));
 
-    enableShadows(t.worldGroup);
     t.townRadius = TOWN_RADIUS;
     t.playerPos.set(0, 0, 6);
     positionPlayer();
@@ -1238,7 +1225,6 @@ export default function ErebosGame() {
     [-2.4, 2.4].forEach((dx) => addPillar(t.worldGroup, exitPos.x + dx, exitPos.z + 1.6, 3, palette.pillar));
     t.interactables.push({ type: "exit", pos: exitPos, radius: 3, label: "Kasabaya dön" });
 
-    enableShadows(t.worldGroup);
     t.playerPos.set(entrance.cx, 0, entrance.cz + entrance.d / 2 - 4);
     positionPlayer();
   }
@@ -1251,7 +1237,6 @@ export default function ErebosGame() {
       while (t.playerGroup.children.length) t.playerGroup.remove(t.playerGroup.children[0]);
       const stats = effectiveStats(p);
       const mesh = buildCharacterMesh(stats.color, "humanoid");
-      mesh.traverse((o) => { if (o.isMesh) o.castShadow = true; });
       t.playerGroup.add(mesh);
       t.playerMesh = mesh;
     }
@@ -1264,20 +1249,6 @@ export default function ErebosGame() {
     t.playerGroup.position.copy(t.playerPos);
     t.camera.position.copy(t.playerPos).add(t.camOffset);
     t.camera.lookAt(t.playerPos);
-    if (t.sun) {
-      // Snap the shadow-casting light to a coarse grid instead of following every frame at
-      // sub-pixel precision — a continuously-drifting light causes the shadow map to visibly
-      // shimmer ("swim") across the ground as the character moves.
-      const grid = 3;
-      const sx = Math.round(t.playerPos.x / grid) * grid;
-      const sz = Math.round(t.playerPos.z / grid) * grid;
-      if (t._sunSnapX !== sx || t._sunSnapZ !== sz) {
-        t._sunSnapX = sx; t._sunSnapZ = sz;
-        t.sun.position.set(sx + 18, 30, sz + 12);
-        t.sun.target.position.set(sx, 0, sz);
-        t.sun.target.updateMatrixWorld();
-      }
-    }
   }
 
   /* ---------------- interaction ---------------- */
